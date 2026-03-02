@@ -1,4 +1,20 @@
 ---
+# Fallback: re-evaluate needs_cordoning if the fact was lost between roles
+- name: Check if node is unschedulable
+  command: >
+    {{ kubectl }} get node {{ kube_override_hostname | default(inventory_hostname) }}
+    -o jsonpath='{ .spec.unschedulable }'
+  register: kubectl_node_unschedulable
+  delegate_to: "{{ groups['kube_control_plane'][0] }}"
+  failed_when: false
+  changed_when: false
+  when: needs_cordoning is not defined
+
+- name: Set needs_cordoning from node state
+  set_fact:
+    needs_cordoning: "{{ kubectl_node_unschedulable.stdout | default('') == 'true' }}"
+  when: needs_cordoning is not defined
+
 - name: Wait for cilium
   when:
     - needs_cordoning | default(false)
